@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Collections.Generic;
 
-namespace IRCClient
+namespace GarbageIRC
 {
     class Program
     {
@@ -22,6 +22,7 @@ namespace IRCClient
         }
 
         public void OnMessageReceivedHandler(IRCMessage message) {
+            Console.WriteLine(message.Command.Length);
             switch(message.Command) {
                 case "NOTICE":
                     Log.Enqueue($"NOTICE from {message.Prefix}: {message.Parameters[1]}");
@@ -51,7 +52,7 @@ namespace IRCClient
             string message = null;
             if (Nickname == null) {
                 // First connection.
-                message = $"NICK {nickname}\r\n";
+                message = $"NICK {nickname}";
             }
             else {
                 message = $":{Nickname} NICK {nickname}";
@@ -63,19 +64,19 @@ namespace IRCClient
         }
 
         public void SendUSER(string username, string realname) {
-            string message = $"USER {username} 0 * :{realname}\r\n";
+            string message = $"USER {username} 0 * :{realname}";
 
             Connection.SendMessage(message);
         }
 
         public void SendPONG(string pong) {
-            string message = $"PONG {pong}\r\n";
+            string message = $"PONG {pong}";
 
             Connection.SendMessage(message);
         }
 
         public void SendJOIN(string channel) {
-            string message = $"JOIN {channel}\r\n";
+            string message = $"JOIN {channel}";
 
             Connection.SendMessage(message);
         }
@@ -98,8 +99,6 @@ namespace IRCClient
             if (args.Length != 6) {
                 return;
             }
-
-            Console.WriteLine("Huh?");
 
             if (!int.TryParse(args[1], out int port)) {
                 return;

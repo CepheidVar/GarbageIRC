@@ -4,14 +4,16 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 
-namespace IRCClient {
+namespace GarbageIRC {
     public delegate void MessageReceived(IRCMessage message);
 
     public class ClientConnection {
+        private static readonly int BUFFER_SIZE = 512;
         private TcpClient Connection;
         private NetworkStream ServerStream;
-        private Thread ServerThread;
+        private Thread ServerThread = null;
         public bool Connected { get; private set; } = false;
+        private bool StopThread = false;
 
         public event MessageReceived OnMessageReceived;
 
@@ -20,56 +22,19 @@ namespace IRCClient {
         }
 
         public void ServerThreadFunc() {
-            byte[] bytes = new byte[512];
-            List<byte> data = new List<byte>();
-            List<byte> stringBytes = new List<byte>();
-            while (Connected) {
-                data.Clear();
-                stringBytes.Clear();
-                if (Connection.Connected) {
-                    int bytesRead = 0;
-                    bytesRead = ServerStream.Read(bytes);
-                    for (int i = 0; i < bytesRead; i++) {
-                        data.Add(bytes[i]);
-                    }
+            LineBuffer lb = new LineBuffer();
+            while (!StopThread) {
+                do {
+                    byte[] bytes = new byte[BUFFER_SIZE];
+                    int bytesRead = ServerStream.Read(bytes);
+                    lb.AddData(bytes, bytesRead);
+                } while (ServerStream.DataAvailable && !StopThread);
 
-                    while (ServerStream.DataAvailable) {
-                        bytesRead = ServerStream.Read(bytes);
-                        for (int i = 0; i < bytesRead; i++) {
-                            data.Add(bytes[i]);
-                        }
-                    }
-                }
-
-                if (!Connection.Connected) {
-                    return;
-                }
-
-                bool doneSplitting = false;
-                while (!doneSplitting) {
-                    stringBytes.Clear();
-                    bool foundString = false;
-
-                    //  We got all the data that can be read, so see if any strings are in it.
-                    for (int i = 0; i < data.Count && !foundString; i++) {
-                        if (i + 1 < data.Count && data[i] == 0x0d && data[i + 1] == 0x0a) {
-                            data.RemoveRange(0, i + 2);
-                            string decoded = Encoding.UTF8.GetString(stringBytes.ToArray());
-                            IRCMessage ircMessage = new IRCMessage(decoded);
-                            foundString = true;
-
-                            lock (this) {
-                                OnMessageReceived?.Invoke(ircMessage);
-                            }
-                        }
-                        else {
-                            stringBytes.Add(data[i]);
-                        }
-                    }
-
-                    //  Escape loop if remaining data is incomplete.
-                    if (!foundString) {
-                        doneSplitting = true;
+                while (lb.LineAvailable && !StopThread) {
+                    string line = lb.GetNextLine();
+                    IRCMessage message = new IRCMessage(line);
+                    lock(this) {
+                        OnMessageReceived?.Invoke(message);
                     }
                 }
             }
@@ -77,14 +42,19 @@ namespace IRCClient {
         
         public void Connect(string address, int port) {
             lock (this) {
+                if (Connected) {
+                    Disconnect();
+                }
+
                 if (!Connected) {
-                    Console.WriteLine("Connecting to " + address + ":" + port);
                     Connection.Connect(address, port);
-                    Console.WriteLine("Connected.");
                     ServerStream = Connection.GetStream();
                     Connected = true;
 
-                    ServerThread = new Thread(ServerThreadFunc);
+                    if (ServerThread == null) {
+                        ServerThread = new Thread(ServerThreadFunc);
+                    }
+
                     ServerThread.Start();
                 }
             }
@@ -94,12 +64,16 @@ namespace IRCClient {
             lock (this) {
                 if (Connected) {
                     Connection.Close();
+                    ServerStream.Close();
+                    ServerStream = null;
+
+                    StopThread = true;
+                    ServerThread.Join();
+
+                    StopThread = false;
                     Connected = false;
                 }
             }
-
-            ServerThread.Join();
-            Console.WriteLine("Connection closed.");
         }
 
         public void SendMessage(string message) {

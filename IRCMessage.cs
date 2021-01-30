@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System;
 
-namespace IRCClient {
+namespace GarbageIRC {
     public class IRCMessage {
         public string Prefix { get; private set; } = "";
         public bool HasPrefix { get; private set; } = false;
@@ -12,7 +12,7 @@ namespace IRCClient {
         public IReadOnlyList<string> Parameters { get => _Parameters; }
 
         public IRCMessage(string message) {
-            string[] parts = message.Split(" ", 2, StringSplitOptions.RemoveEmptyEntries);
+            string[] parts = message.Split(" ", 2);
 
             int spcIdx = 0;
             if (parts[0].StartsWith(":")) {
@@ -24,7 +24,7 @@ namespace IRCClient {
                 message = message.Remove(0, spcIdx + 1);
             }
 
-            parts = message.Split(" ", 2, StringSplitOptions.RemoveEmptyEntries);
+            parts = message.Split(" ", 2);
 
             Command = parts[0];
             spcIdx = message.IndexOf(" ");
@@ -49,7 +49,7 @@ namespace IRCClient {
                 break;
                 default:
                     { 
-                        parts = message.Split(":", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                        parts = message.Split(":");
                     }
                 break;
             }
